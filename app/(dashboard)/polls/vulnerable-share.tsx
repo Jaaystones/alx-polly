@@ -12,23 +12,30 @@ import {
 } from "@/components/ui/card";
 import { Copy, Share2, Twitter, Facebook, Mail } from "lucide-react";
 import { toast } from "sonner";
+import { sanitizeInput } from "@/app/lib/utils/security";
 
-interface VulnerableShareProps {
+interface SecureShareProps {
   pollId: string;
   pollTitle: string;
 }
 
-export default function VulnerableShare({
+export default function SecureShare({
   pollId,
   pollTitle,
-}: VulnerableShareProps) {
+}: SecureShareProps) {
   const [shareUrl, setShareUrl] = useState("");
+  
+  // Sanitize the poll title to prevent XSS
+  const sanitizedTitle = sanitizeInput(pollTitle);
 
   useEffect(() => {
-    // Generate the share URL
-    const baseUrl = window.location.origin;
-    const pollUrl = `${baseUrl}/polls/${pollId}`;
-    setShareUrl(pollUrl);
+    // Generate the share URL - only use sanitized parameters
+    if (typeof window !== 'undefined') {
+      const baseUrl = window.location.origin;
+      const safePollId = encodeURIComponent(pollId);
+      const pollUrl = `${baseUrl}/polls/${safePollId}`;
+      setShareUrl(pollUrl);
+    }
   }, [pollId]);
 
   const copyToClipboard = async () => {
@@ -41,28 +48,38 @@ export default function VulnerableShare({
   };
 
   const shareOnTwitter = () => {
-    const text = encodeURIComponent(`Check out this poll: ${pollTitle}`);
+    const text = encodeURIComponent(`Check out this poll: ${sanitizedTitle}`);
     const url = encodeURIComponent(shareUrl);
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${text}&url=${url}`;
+    
+    // Open in a new window with security precautions
     window.open(
-      `https://twitter.com/intent/tweet?text=${text}&url=${url}`,
+      twitterUrl,
       "_blank",
+      "noopener,noreferrer"
     );
   };
 
   const shareOnFacebook = () => {
     const url = encodeURIComponent(shareUrl);
+    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
+    
     window.open(
-      `https://www.facebook.com/sharer/sharer.php?u=${url}`,
+      facebookUrl,
       "_blank",
+      "noopener,noreferrer"
     );
   };
 
   const shareViaEmail = () => {
-    const subject = encodeURIComponent(`Poll: ${pollTitle}`);
+    const subject = encodeURIComponent(`Poll: ${sanitizedTitle}`);
     const body = encodeURIComponent(
       `Hi! I'd like to share this poll with you: ${shareUrl}`,
     );
-    window.open(`mailto:?subject=${subject}&body=${body}`);
+    
+    // Use mailto protocol with sanitized inputs
+    const mailtoUrl = `mailto:?subject=${subject}&body=${body}`;
+    window.location.href = mailtoUrl;
   };
 
   return (
