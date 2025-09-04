@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,52 @@ import { register } from '@/app/lib/actions/auth-actions';
 export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState<string>('');
+  const [csrfToken, setCsrfToken] = useState<string>('');
+
+  useEffect(() => {
+    // Get the CSRF token from the meta tag initially
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (token) {
+      setCsrfToken(token);
+    }
+    
+    // Also fetch a fresh token that will set the cookie
+    fetch('/api/csrf')
+      .then(res => res.json())
+      .then(data => {
+        if (data.token) {
+          setCsrfToken(data.token);
+        }
+      })
+      .catch(err => console.error('Error fetching CSRF token:', err));
+  }, []);
+
+  const validatePassword = (password: string): boolean => {
+    const minLength = 8;
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+    
+    const isValid = password.length >= minLength && 
+                    hasUpperCase && 
+                    hasLowerCase && 
+                    hasNumbers && 
+                    hasSpecialChar;
+    
+    if (password.length === 0) {
+      setPasswordStrength('');
+    } else if (isValid) {
+      setPasswordStrength('strong');
+    } else if (password.length >= 6 && (hasUpperCase || hasLowerCase) && hasNumbers) {
+      setPasswordStrength('medium');
+    } else {
+      setPasswordStrength('weak');
+    }
+    
+    return isValid;
+  };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -27,8 +73,19 @@ export default function RegisterPage() {
       setLoading(false);
       return;
     }
+    
+    if (!validatePassword(password)) {
+      setError('Password must be at least 8 characters and include uppercase, lowercase, numbers, and special characters');
+      setLoading(false);
+      return;
+    }
+    
+    // Add the CSRF token
+    if (csrfToken) {
+      formData.append('csrf_token', csrfToken);
+    }
 
-    const result = await register({ name, email, password });
+    const result = await register(formData);
 
     if (result?.error) {
       setError(result.error);
@@ -76,7 +133,20 @@ export default function RegisterPage() {
                 type="password" 
                 required
                 autoComplete="new-password"
+                onChange={(e) => validatePassword(e.currentTarget.value)}
               />
+              {passwordStrength && (
+                <div className="text-sm mt-1">
+                  Password strength: 
+                  <span className={
+                    passwordStrength === 'strong' ? 'text-green-500 ml-1 font-medium' : 
+                    passwordStrength === 'medium' ? 'text-yellow-500 ml-1 font-medium' : 
+                    'text-red-500 ml-1 font-medium'
+                  }>
+                    {passwordStrength}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirm Password</Label>
