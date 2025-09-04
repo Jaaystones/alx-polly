@@ -1,5 +1,6 @@
 import { getPollById } from '@/app/lib/actions/poll-actions';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
 // Import the client component
 import EditPollForm from './EditPollForm';
 
@@ -8,6 +9,15 @@ export default async function EditPollPage({ params }: { params: { id: string } 
 
   if (error || !poll) {
     notFound();
+  }
+  
+  // Check if the current user is the owner of the poll
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user || poll.user_id !== user.id) {
+    // Redirect to unauthorized page or polls list
+    redirect('/polls');
   }
 
   return (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,25 @@ import { login } from '@/app/lib/actions/auth-actions';
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [csrfToken, setCsrfToken] = useState<string>('');
+
+  useEffect(() => {
+    // Get the CSRF token from the meta tag initially
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (token) {
+      setCsrfToken(token);
+    }
+    
+    // Also fetch a fresh token that will set the cookie
+    fetch('/api/csrf')
+      .then(res => res.json())
+      .then(data => {
+        if (data.token) {
+          setCsrfToken(data.token);
+        }
+      })
+      .catch(err => console.error('Error fetching CSRF token:', err));
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -18,10 +37,12 @@ export default function LoginPage() {
     setError(null);
 
     const formData = new FormData(event.currentTarget);
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
+    // Add CSRF token to form data
+    if (csrfToken) {
+      formData.append('csrf_token', csrfToken);
+    }
 
-    const result = await login({ email, password });
+    const result = await login(formData);
 
     if (result?.error) {
       setError(result.error);
